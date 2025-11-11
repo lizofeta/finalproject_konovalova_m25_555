@@ -1,0 +1,16 @@
+.venv/
+.venv
+.env
+__pycache__/
+__ruff_cache__/
+dist/
+*.whl
+*.tar.gz
+.log
+.vscode/
+tmp/
+temp/
+build/
+*.pyc 
+*.pyo
+*.pyd
