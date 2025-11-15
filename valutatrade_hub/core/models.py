@@ -101,7 +101,7 @@ class User:
         """
         if len(new_password.strip()) < 4:
             raise ValueError('Пароль должен быть не короче 4 символов.')
-        new_salt = uuid.uuid4.hex()
+        new_salt = uuid.uuid4().hex
         self._salt = new_salt 
         self._hashed_password = self._hash_password(new_password, new_salt)
         return self._hashed_password
