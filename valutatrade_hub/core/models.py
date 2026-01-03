@@ -99,7 +99,7 @@ class User:
         self._salt = new_salt 
         self._hashed_password = self._hash_password(new_password, new_salt)
 
-    def verufy_password(self, password):
+    def verify_password(self, password):
         """
         Проверяет введенный пользователем пароль на совпадение с сохраненным 
         хешированнвм паролем.
@@ -242,7 +242,7 @@ class Portfolio:
     
     @property
     def wallet(self):
-        return self._wallet.copy()
+        return self._wallets.copy()
     
     def add_currency(self, currency_code: str, initial_balance: float = 0.0):
         """
@@ -262,6 +262,7 @@ class Portfolio:
         """
         if not isinstance(currency_code, str):
             raise TypeError('Код валюты должен быть строкой')
+        currency_code = currency_code.upper()
         if currency_code in self._wallets:
             return self._wallets.get(currency_code)
         else:
@@ -301,7 +302,7 @@ class Portfolio:
         return total_balance
     
     def to_dict(self):
-        """ Конвертирует портфолио в словарь """
+        """ Конвертирует портфель в словарь """
         return {
             "user_id": self._user_id,
             "wallets": {
@@ -311,7 +312,7 @@ class Portfolio:
     
     @classmethod
     def from_dict(cls, data: dict):
-        """ Создает экземпляр портфолио из словаря """
+        """ Создает экземпляр портфеля из словаря """
         wallets = {
             code: Wallet.from_dict(wallet)
             for code, wallet in data.get('wallets', {}).items()
