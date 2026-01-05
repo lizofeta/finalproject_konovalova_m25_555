@@ -10,7 +10,7 @@ packages = [
 ]
 
 [tool.poetry.scripts]
-project = "main:main"
+project = "valutatrade_hub.cli.interface:main"
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -30,3 +30,14 @@ ignore = []
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.valutatrade]
+data_path = "data"
+users_file_path = "users.json"
+portfolios_file_path = "portfolios.json"
+rates_file_path = "rates.json"
+rates_ttl_seconds = "300"
+default_base_currency = "USD"
+log_level = "INFO"
+log_format = "[%(levelname)s] %(asctime)s %(message)s"
+date_format = "%Y-%m-%dT%H:%M:%S"
