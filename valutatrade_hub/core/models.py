@@ -4,6 +4,9 @@ import datetime
 import hashlib
 import uuid
 
+from valutatrade_hub.core.exceptions import InsufficientFundsError
+
+
 class User:
     """ Класс пользователя """
 
@@ -22,34 +25,47 @@ class User:
             self, 
             user_id: int, 
             username: str, 
-            hashed_password: str, 
-            salt: str, 
-            registration_date: datetime
+            password: str,
+            hashed_password: str = None, 
+            salt: str = None, 
+            registration_date: datetime = None
         ): 
         """
         Конструктор класса User
 
         user_id: уникальный идентификатор пользователя
         username: имя пользователя
+        password: пароль в открытом виде (если пользователь еще не зарегистрирован)
         hashed_password: пароль в зашифрованном виде
         salt: уникальная соль для пользователя
         registration_date: дата регистрации пользователя
         """
         if not isinstance(user_id, int) or user_id <= 0:
-            raise ValueError('Уникальный идентификатор должен быть целым положительным числом.')
+            raise ValueError\
+            ('Уникальный идентификатор должен быть целым положительным числом.')
         self._user_id = user_id
         self._username = username 
 
-        if not isinstance(hashed_password, str):
-            raise TypeError('Хешированный пароль болжен быть представлен строкой.')
-        if len(hashed_password.strip()) < 4:
-            raise ValueError('Пароль должен быть не короче 4 символов.')
-        self._hashed_password = hashed_password 
-        self._salt = salt 
+        if password and not hashed_password:
+            self._salt = uuid.uuid4.hex()
+            self._hashed_password = self._hash_password(password, self._salt)
+        elif hashed_password and salt:
+            if not isinstance(hashed_password, str) or not isinstance(salt, str):
+                raise TypeError\
+                ('Хешированный пароль и соль должны быть представлены строками.')
+            self._salt = salt 
+            self._hashed_password = hashed_password
+        else:
+            raise ValueError\
+            ('Необходимо указать либо открытый пароль (при регистрации),\
+ либо захешированный + соль (для зарегистрированного пользователя).')
 
-        if not isinstance(registration_date, datetime.datetime):
-            raise TypeError('Дата регистрации должна быть объектом datetime')
-        self._registration_date = registration_date 
+        if registration_date:
+            if not isinstance(registration_date, datetime.datetime):
+                raise TypeError('Дата регистрации должна быть объектом datetime')
+            self._registration_date = registration_date 
+        else:
+            self._registration_date = datetime.datetime.now()
 
     # Геттеры
     @property
@@ -168,7 +184,11 @@ class Wallet:
         if amount <= 0:
             raise ValueError('Сумма списания должна быть больше 0.')
         if amount > self._balance:
-            raise ValueError('На балансе недостаточно средств.')
+            raise InsufficientFundsError(
+                available=self._balance, 
+                code=self.currency_code,
+                required=amount
+            )
         self._balance -= float(amount)
         return self._balance
 
@@ -215,7 +235,7 @@ class Portfolio:
     def __init__(
             self, 
             user_id: int, 
-            wallets: dict[str, Wallet]
+            wallets: dict[str, Wallet] = {}
         ):
         """
         Конструктор класса Portfolio
@@ -226,14 +246,18 @@ class Portfolio:
         if not isinstance(user_id, int) or user_id <= 0:
             raise ValueError('Идентификатор пользователя должен быть целым числом.')
         self._user_id = user_id
-
-        if not isinstance(wallets, dict):
-            raise TypeError('Кошельки пользователя должны передаваться в словаре.')
-        if not all(isinstance(code, str) for code in wallets):
-            raise TypeError('Коды валют в словаре кошельков должны быть строками.')
-        if not all(isinstance(wallet, Wallet) for wallet in wallets.values()):
-            raise TypeError('Значения в словаре кошельков должны быть объектами Wallet кошелька.')
-        self._wallets = wallets 
+        
+        if wallets:
+            if not isinstance(wallets, dict):
+                raise TypeError('Кошельки пользователя должны передаваться в словаре.')
+            if not all(isinstance(code, str) for code in wallets):
+                raise TypeError('Коды валют в словаре кошельков должны быть строками.')
+            if not all(isinstance(wallet, Wallet) for wallet in wallets.values()):
+                raise TypeError\
+                ('Значения в словаре кошельков должны быть объектами Wallet кошелька.')
+            self._wallets = wallets 
+        else:
+            self._wallets = {}
     
     # Геттеры
     @property 
@@ -268,7 +292,10 @@ class Portfolio:
         else:
             raise ValueError(f'Кошелька с валютой {currency_code} нет в портфеле.')
 
-    def get_total_value(self, base_currency='USD', exchange_rates: dict[str, float] = None):
+    def get_total_value(
+            self, 
+            base_currency='USD', 
+            exchange_rates: dict[str, float] = None):
         """
         Возвращает общую стоимость всех валют пользователя в указанной базовой валюте.
         По умолчанию базовая валюта - 'USD'.
