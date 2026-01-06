@@ -32,7 +32,7 @@ class InsufficientFundsError(ValutatradeError):
         self.code = code 
         self.required = required
         message = f"Недостаточно средств: доступно {self.available}\
-              {self.code}, требуется {self.required} {self.code}"
+ {self.code}, требуется {self.required} {self.code}"
         super().__init__(message)
 
 class ApiRequestError(ValutatradeError):
@@ -96,7 +96,7 @@ class RateUnavailableError(ValutatradeError):
         self.currency_from = currency_from 
         self.currency_to = currency_to
         super().__init__(f"Ошибка получения курса\
-                          для {self.currency_from}->{self.currency_to}")
+ для {self.currency_from}->{self.currency_to}")
 
 class CommandNotAllowedError(ValutatradeError):
     """
@@ -112,8 +112,8 @@ class ArgumentsError(ValutatradeError):
     def __init__(self, command:str, prompt:str=None):
         if prompt:
             message = f"Неверный ввод команды {command}.\
-                 Попробуйте снова: {prompt}"
+ Попробуйте снова: {prompt}"
         else:
             message = f"Неверный ввод команды {command}.\
-                Воспользуйтесь командой help и попробуйте снова."
+ Воспользуйтесь командой help и попробуйте снова."
         super().__init__(message)
