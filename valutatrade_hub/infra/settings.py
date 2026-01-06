@@ -12,9 +12,11 @@ class SettingsLoader:
     Класс для загрузки и кеширования настроек проекта.
     Реализован как Singleton, чтоб гарантировать единственность экземпляра.
     Способ реализации Singleton-a: 
-        метод __new__ ввиду простоты задачи и читабельности подхода.
+        метод __new__ ввиду простоты задачи и читаемости.
     """
     _instance = None 
+    _initialized = False
+
     _config = {} 
     _api_key = None
 
@@ -26,9 +28,16 @@ class SettingsLoader:
         """
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._load_config()
-            cls._instance._load_env()
         return cls._instance
+    
+    def __init__(self):
+        """
+        Инициализация выполняется ровно 1 раз.
+        """
+        if self.__class__._initialized:
+            return
+        self._load_config()
+        self._load_env()
     
     def _load_config(self):
         """
@@ -40,20 +49,20 @@ class SettingsLoader:
         try:
             with open(pyproject_filepath, 'r', encoding='utf-8') as f:
                 pyproject_content = toml.load(f)
-                valtatrade_config = pyproject_content.\
-                    get('tool', {}).get('valutatrade', {})
-                if valtatrade_config:
-                    config_data.update(valtatrade_config)
-                else:
-                    raise NoContentError(pyproject_filepath)
+            valtatrade_config = pyproject_content.\
+                get('tool', {}).get('valutatrade', {})
+            if valtatrade_config:
+                config_data.update(valtatrade_config)
+            else:
+                raise NoContentError(pyproject_filepath)
+            self.__class__._config = config_data
         except FileNotFoundError:
-            print(f'Файл {pyproject_filepath} не найден.')
+            raise RuntimeError(f'Файл {pyproject_filepath} не найден.')
         except toml.TomlDecodeError as e:
-            print(f'Ошибка парсинга файла {pyproject_filepath}: {e}')
+            raise RuntimeError(f'Ошибка парсинга файла {pyproject_filepath}: {e}')
         except NoContentError as e:
-            print(e)
-        
-        self.__class__._config = config_data
+            raise RuntimeError(str(e))
+    
     
     def _load_env(self):
         env_path = ".env"
@@ -102,7 +111,8 @@ class SettingsLoader:
         """ Метод для получения конфигурации логирования """
         return {
             "log_level": self.get('log_level'),
-            "log_format": self.get('log_format')
+            "log_format": self.get('log_format'),
+            "date_format": self.get('date_format')
         }
     
     def get_api_key(self):
