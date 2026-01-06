@@ -25,7 +25,7 @@ class User:
             self, 
             user_id: int, 
             username: str, 
-            password: str,
+            password: str = None,
             hashed_password: str = None, 
             salt: str = None, 
             registration_date: datetime = None
@@ -47,7 +47,7 @@ class User:
         self._username = username 
 
         if password and not hashed_password:
-            self._salt = uuid.uuid4.hex()
+            self._salt = uuid.uuid4().hex
             self._hashed_password = self._hash_password(password, self._salt)
         elif hashed_password and salt:
             if not isinstance(hashed_password, str) or not isinstance(salt, str):
@@ -92,7 +92,7 @@ class User:
     @username.setter
     def username(self, value: str):
         if not isinstance(value, str):
-            raise TypeError('Имя должно быть представленно строкой.')
+            raise TypeError('Имя должно быть представлено строкой.')
         if not value.strip():
             raise ValueError('Имя не должно быть пустым.')
         self._username = value.strip()
@@ -118,7 +118,7 @@ class User:
     def verify_password(self, password):
         """
         Проверяет введенный пользователем пароль на совпадение с сохраненным 
-        хешированнвм паролем.
+        хешированным паролем.
         """
         if not isinstance(password, str):
             return False
@@ -132,7 +132,7 @@ class User:
             "username": self._username,
             "hashed_password": self._hashed_password,
             "salt": self._salt,
-            "registration_date": self._registration_date
+            "registration_date": self._registration_date.isoformat()
         }
     
     @classmethod
@@ -145,7 +145,8 @@ class User:
             username = data.get('username'),
             hashed_password = data.get('hashed_password'),
             salt = data.get('salt'),
-            registration_date = datetime.fromisoformat(data.get('registration_date'))
+            registration_date = datetime.datetime\
+                .fromisoformat(data.get('registration_date'))
         )
 
 
@@ -235,7 +236,7 @@ class Portfolio:
     def __init__(
             self, 
             user_id: int, 
-            wallets: dict[str, Wallet] = {}
+            wallets: dict[str, Wallet] | None = None
         ):
         """
         Конструктор класса Portfolio
@@ -261,7 +262,7 @@ class Portfolio:
     
     # Геттеры
     @property 
-    def user(self):
+    def user_id(self):
         return self._user_id
     
     @property
@@ -279,6 +280,7 @@ class Portfolio:
         currency_code = currency_code.upper()
         new_wallet = Wallet(currency_code, initial_balance)
         self._wallets[currency_code] = new_wallet
+        return new_wallet
     
     def get_wallet(self, currency_code: str):
         """ 
@@ -306,7 +308,7 @@ class Portfolio:
         total_balance = 0
         for currency, wallet in self._wallets.items():
             if currency == base_currency:
-                balance = wallet.get('balance')
+                balance = wallet.balance
                 if balance:
                     total_balance += balance
             else:
@@ -323,8 +325,8 @@ class Portfolio:
                     raise ValueError((f'Курс для валюты {currency} '
                     f'относительно {base_currency} не найден.'))
                 currency_rate = exchange_rates.get(rate_key)
-                currency_balance = wallet.get('balance')
-                balance = currency_balance / currency_rate
+                currency_balance = wallet.balance
+                balance = currency_balance * currency_rate
                 total_balance += balance
         return total_balance
     
