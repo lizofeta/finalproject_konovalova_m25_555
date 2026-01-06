@@ -13,6 +13,7 @@ from valutatrade_hub.core.exceptions import (
 from valutatrade_hub.core.models import Portfolio, User
 from valutatrade_hub.infra.database import DatabaseManager, get_database
 from valutatrade_hub.infra.settings import SettingsLoader, get_settings
+from valutatrade_hub.decorators import log_action
 
 
 class Session:
@@ -64,6 +65,7 @@ class UserCommands:
         else:
             self.database = get_database()
     
+    @log_action(action='REGISTER', verbose=False)
     def register(self, username:str, password:str, initial_usd_amount:float|int):
         """
         Регистрация нового пользователя.
@@ -88,8 +90,8 @@ class UserCommands:
             raise TypeError\
             ("Начальная сумма пополнения USD кошелька должна быть числом.")
         if initial_usd_amount <= 0:
-            raise ValueError("Начальная сумма пополнения USD\
-                              кошелька должна быть положительным числом.")
+            raise ValueError(("Начальная сумма пополнения USD "
+                             "кошелька должна быть положительным числом."))
 
         # Проверка длины пароля
         if len(password) < 4:
@@ -115,10 +117,11 @@ class UserCommands:
         portfolios.append(new_portfolio)
         self.database.save_portfolios(portfolios)
 
-        return f"Пользователь с именем {username}\
-            успешно зарегистрирован под id={new_id}.\
-            \nСоздан USD-кошелек с начальным балансом: {initial_usd_amount}"
+        return (f"Пользователь с именем {username} "
+            f"успешно зарегистрирован под id={new_id}."
+            f"\nСоздан USD-кошелек с начальным балансом: {initial_usd_amount}")
 
+    @log_action(action='LOGIN', verbose=False)
     def login(self, username:str, password:str):
         """
         Войти и зафиксировать текущую сессию.
@@ -144,8 +147,8 @@ class UserCommands:
         if user.verify_password(password) is False:
             raise WrongPasswordError()
         
-        self.session.login()
-        return f"Вы успешно вошли под именем '{username}'"
+        self.session.login(user)
+        return f"Вы успешно вошли под именем '{username}'."
     
 
 class PortfolioCommands:
@@ -195,8 +198,8 @@ class PortfolioCommands:
         portfolio = self.database.find_portfolio_by_user_id(user_id)
 
         if not portfolio._wallets:
-            return f"Портфель пользователя {user.username} пуст.\
-                Используйте команду 'buy' для покупки валюты."
+            return (f"Портфель пользователя {user.username} пуст. "
+                    "Используйте команду 'buy' для покупки валюты.")
         result = [f"Портфель пользователя {user.username} (база: {base}):"]
 
         total_balance = 0.0
@@ -216,10 +219,11 @@ class PortfolioCommands:
             result.append(f"- {code}: {balance:.2f} -> {base}: {balance_base:.2f}")
         
         result.append("---------------------------------")
-        result.append(f"ИТОГО: {balance_base:.2f} {base}")
+        result.append(f"ИТОГО: {total_balance:.2f} {base}")
 
         return "\n".join(result)
     
+    @log_action(action='BUY', verbose=True)
     def buy(self, currency:str, amount:float|int):
         """
         Метод для покупки валют. Покупка других валют возможна только за USD.
@@ -285,18 +289,19 @@ class PortfolioCommands:
         # Сохраняем портфель с изменениями
         self.database.save_portfolio(portfolio)
 
-        result = [
-            f"Покупка выполнена: {amount} {currency}\
-            по курсу {rate} USD/{currency}\
-            \nИзменения в портфеле:\
-            \n{currency}: было {currency_old_balance:.4f}\
- -> стало {currency_new_balance:.4f}\
-            \nUSD: было {usd_old_balance:.2f} -> стало {usd_new_balance:.2f}\
-            \nОценочная стоимость покупки: {usd_price:.2f} USD"
-        ]
+        result = (
+            f"Покупка выполнена: {amount} {currency} "
+            f"по курсу {rate} USD/{currency}"
+            f"\nИзменения в портфеле:"
+            f"\n{currency}: было {currency_old_balance:.4f} "
+            f"-> стало {currency_new_balance:.4f}"
+            f"\nUSD: было {usd_old_balance:.2f} -> стало {usd_new_balance:.2f}"
+            f"\nОценочная стоимость покупки: {usd_price:.2f} USD"
+        )
 
         return result 
     
+    @log_action(action='BUY_USD', verbose=True)
     def buy_usd(self, amount:float):
         """
         Метод для покупки USD за деньги из внешнего источника (имитация)
@@ -323,10 +328,11 @@ class PortfolioCommands:
         usd_new_balance = portfolio.get_wallet('USD').balance 
         self.database.save_portfolio(portfolio)
 
-        return f"Покупка выполнена: {amount} USD\
-                 \nИзменения в портфеле:\
-                 USD: было {usd_old_balance:.2f} -> стало {usd_new_balance:.2f}"
+        return (f"Покупка выполнена: {amount} USD"
+                "\nИзменения в портфеле: "
+                f"USD: было {usd_old_balance:.2f} -> стало {usd_new_balance:.2f}")
     
+    @log_action(action='SELL', verbose=True)
     def sell(self, currency:str, amount:float|int):
         """
         Метод для продажи валют. Возможна продажа всех валют, 
@@ -355,6 +361,8 @@ class PortfolioCommands:
         # Валидация кода покупаемой валюты
         if not isinstance(currency, str):
             raise TypeError("Код валюты должен быть строкой.")
+        if currency == 'USD':
+            raise ValueError('Продажа USD не допускается.')
         get_currency(currency.strip())
 
         # Валидация количества покупаемой валюты (amount > 0)
@@ -395,15 +403,15 @@ class PortfolioCommands:
         # Сохраняем измененный портфель
         self.database.save_portfolio(portfolio)
 
-        result = [
-            f"Покупка выполнена: {amount} {currency}\
-            по курсу {rate} USD/{currency}\
-            \nИзменения в портфеле:\
-            \n{currency}: было {currency_old_balance:.4f}\
- -> стало {currency_new_balance:.4f}\
-            \nUSD: было {usd_old_balance:.2f} -> стало {usd_new_balance:.2f}\
-            \nОценочная выручка: {rate * amount:.2f} USD"
-        ]
+        result = (
+            f"Покупка выполнена: {amount} {currency} "
+            f"по курсу {rate} USD/{currency} "
+            "\nИзменения в портфеле:"
+            f"\n{currency}: было {currency_old_balance:.4f} "
+            f"-> стало {currency_new_balance:.4f}"
+            f"\nUSD: было {usd_old_balance:.2f} -> стало {usd_new_balance:.2f}"
+            f"\nОценочная выручка: {rate * amount:.2f} USD"
+        )
 
         return result 
     
@@ -438,58 +446,87 @@ class PortfolioCommands:
         # Попытка взять курс из локального кэша (rates.json)
         # Если курс свежий (моложе 5 минут), берем его, 
         # иначе - запрашиваем у внешнего источника
-        rates = self.database.load_rates()
-        pair_rate = rates.get('rates').\
-            get(f"{currency_from}_{currency_to}").get('rate')
-        updated_at = rates.get('rates').\
-            get(f"{currency_from}_{currency_to}").get('updated_at')
-        ttl = self.settings.get_rates_ttl() # ttl = 300 секунд
-        if updated_at:
-            updated_at_dt = datetime.fromisoformat(updated_at)
-            updated_display = updated_at_dt.isoformat()\
-                .replace('T', ' ').replace('+00:00', '')
-        if datetime.now(timezone.utc) > updated_at_dt + timedelta(seconds=ttl):
-            return [
-                f"Курс {currency_from}->{currency_to}: {pair_rate}\
-                (обновлено: {updated_display}) \
-                \nОбратный курс: {currency_to}->{currency_from}: {1/pair_rate}"
-            ]
-        else:
-            # данные просрочены: заглушка (фиктивные курсы)
-            new_rates = {
-                    "rates": {    
-                        "EUR_USD": {
-                            "rate": 1.1587,
-                            "updated_at": datetime.now(timezone.utc).isoformat()
-                        },
-                        "BTC_USD": {
-                            "rate": 59337.21,  
-                            "updated_at": datetime.now(timezone.utc).isoformat()
-                        },
-                        "RUB_USD": {
-                            "rate": 0.01237,      
-                            "updated_at": datetime.now(timezone.utc).isoformat()
-                        },
-                        "ETH_USD": {
-                            "rate": 3720.00,         
-                            "updated_at": datetime.now(timezone.utc).isoformat()
-                        },
-                        "IRR_USD": {
-                            "rate": 42276.9082,
-                            "updated_at": datetime.now(timezone.utc).isoformat()
-                        } 
-                    },
-                    "last_refresh": datetime.now(timezone.utc).isoformat()
-                }
-            self.database.save_rates(new_rates)
-            new_pair_rate = new_rates.get('rates')\
-                .get(f'{currency_from}_{currency_to}').get('rate')
-            new_updated_at = new_rates.get('rates')\
-                .get(f'{currency_from}_{currency_to}').get('updated_at')
-            new_updated_at_display = new_updated_at.\
-                replace('T', " ").replace('+00:00', '')
-            return [
-                f"Курс {currency_from}->{currency_to}: {new_pair_rate}\
-                (обновлено: {new_updated_at_display})\
-                \nОбратный курс {currency_to}->{currency_from}: {1/new_pair_rate}"
-            ]
+        rates_data = self.database.load_rates()
+        if rates_data:
+            rates = rates_data.get('rates')
+            if rates:
+                pair = rates.get(f"{currency_from}_{currency_to}")
+                if pair:
+                    pair_rate = pair.get('rate')
+                    updated_at = pair.get('updated_at')
+                else:
+                    pair = rates.get(f"{currency_to}_{currency_from}")
+                    if pair:
+                        pair_rate_direct = pair.get('rate') 
+                        if pair_rate_direct:
+                            pair_rate = 1 / pair_rate_direct if pair_rate_direct > 0 else 0
+                        updated_at = pair.get('updated_at')
+            
+            ttl = self.settings.get_rates_ttl() # ttl = 300 секунд
+            reversed_rate = 1/pair_rate if pair_rate > 0 else 0
+            if updated_at:
+                moscow_tz = timezone(timedelta(hours=3))
+                updated_at_dt = datetime.fromisoformat(updated_at).astimezone(moscow_tz)
+                updated_display = updated_at_dt.isoformat()\
+                    .replace('+03:00', '').replace('T', ' ')
+                if datetime.now(timezone.utc) < updated_at_dt + timedelta(seconds=int(ttl)):
+                    return (f"Курс {currency_from}->{currency_to}: {pair_rate:.6f} "
+                         f"(обновлено: {updated_display})"
+                         f"\nОбратный курс: {currency_to}->{currency_from}: {reversed_rate:.6f}")
+                else:
+                    # данные просрочены: заглушка (фиктивные курсы)
+                    new_rates = {
+                            "rates": {    
+                                "EUR_USD": {
+                                    "rate": 1.1587,
+                                    "updated_at": datetime.now(timezone.utc)\
+                                        .replace(microsecond=0).isoformat()
+                                },
+                                "BTC_USD": {
+                                    "rate": 59337.21,  
+                                    "updated_at": datetime.now(timezone.utc)\
+                                        .replace(microsecond=0).isoformat()
+                                },
+                                "RUB_USD": {
+                                    "rate": 0.01237,      
+                                    "updated_at": datetime.now(timezone.utc)\
+                                        .replace(microsecond=0).isoformat()
+                                },
+                                "ETH_USD": {
+                                    "rate": 3720.00,         
+                                    "updated_at": datetime.now(timezone.utc)\
+                                        .replace(microsecond=0).isoformat()
+                                },
+                                "IRR_USD": {
+                                    "rate": 0.000024,
+                                    "updated_at": datetime.now(timezone.utc)\
+                                        .replace(microsecond=0).isoformat()
+                                } 
+                            },
+                            "last_refresh": datetime.now(timezone.utc)\
+                                        .replace(microsecond=0).isoformat()
+                        }
+                    self.database.save_rates(new_rates)
+                    new_rates = new_rates.get('rates')
+                    new_pair = new_rates.get(f'{currency_from}_{currency_to}')
+                    if new_pair:
+                        new_pair_rate = new_pair.get('rate')
+                        new_updated_at = new_pair.get('updated_at')
+                    else:
+                        new_pair = new_rates.get(f'{currency_to}_{currency_from}')
+                        new_pair_rate_direct = new_pair.get('rate')
+                        new_pair_rate = 1/new_pair_rate_direct\
+                              if new_pair_rate_direct > 0 else 0
+                        new_updated_at = new_pair.get('updated_at')
+                    if new_updated_at:
+                        moscow_tz = timezone(timedelta(hours=3))
+                        new_updated_at_dt = datetime.fromisoformat(new_updated_at)\
+                            .astimezone(moscow_tz)
+                        new_updated_at_display = new_updated_at_dt.isoformat()\
+                            .replace('+03:00', '').replace('T', ' ')
+                    new_reversed_rate = 1/new_pair_rate if new_pair_rate > 0 else 0
+                    return (
+                        f"Курс {currency_from}->{currency_to}: {new_pair_rate:.6f} "
+                        f"(обновлено: {new_updated_at_display}) "
+                        f"\nОбратный курс {currency_to}->{currency_from}: {new_reversed_rate:.6f}"
+                    )
