@@ -108,13 +108,16 @@ class DatabaseManager():
         self.rates_data = self._load_json(self.rates_file_path)
 
         if not isinstance(self.rates_data, dict):
-            return {'rates': {}, 'last_refresh': None}
+            self.rates_data = {}
         
+        self.rates_data.setdefault('rates', {})
+        self.rates_data.setdefault('last_refresh', None)
+
         return self.rates_data
     
     def save_rates(self, data: dict):
         """ Метод для схранения данных о курсах валют в файл JSON """
-        self.rate_data = {
+        self.rates_data = {
             'rates': data.get('rates', {}),
             'last_refresh': data.get('last_refresh')
         }
@@ -135,23 +138,25 @@ class DatabaseManager():
         
         rate_key_direct = f'{from_currency}_{to_currency}'
         if rate_key_direct in rates:
-            return rates.get(rate_key_direct)
+            pair = rates.get(rate_key_direct)
+            return pair.get('rate')
         
         rate_key_reverse = f'{to_currency}_{from_currency}'
         if rate_key_reverse in rates:
-            return 1 / rates.get(rate_key_reverse)
+            pair = rates.get(rate_key_reverse)
+            return 1 / pair.get('rate')
         
         return None
     
     def update_rate(self, from_currency: str, to_currency: str, rate: float):
         """ Метод для обновления курса валют """
         self.rate_data = self.load_rates()
-        codes = self.rates_data.setdefault('codes', {})
+        rates = self.rates_data.setdefault('rates', {})
         from_currency = from_currency.upper()
         to_currency = to_currency.upper()
 
         rate_key = f'{from_currency}_{to_currency}'
-        codes[rate_key] = {
+        rates[rate_key] = {
             "rate": rate,
             "updated_at": datetime.now().isoformat()
         }
