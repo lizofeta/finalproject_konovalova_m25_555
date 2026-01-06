@@ -13,8 +13,9 @@ class Utils:
             'logout',
             'show-portfolio',
             'buy',
+            'buy-usd',
             'sell',
-            'get_rate',
+            'get-rate',
             'help',
             'exit'
         ]
@@ -27,7 +28,7 @@ class Utils:
 'logout                                              -> выйти из своего аккаунта.', # noqa: E501
 'show-portfolio                                      -> показать все свои кошельки и итоговую стоимость в базовой валюте (доллар).', # noqa: E501
 'buy <currency> <amount>                             -> купить валюту.', # noqa: E501
-'buy-usd <amount>                                    -> пополнить USD кошелек', # noqa: E501
+'buy-usd <amount>                                    -> пополнить USD кошелек.', # noqa: E501
 'sell <currency> <amount>                            -> продать валюту.', # noqa: E501
 'get-rate <from_currency> <to_currency>              -> получить текущий курс одной валюты к другой.', # noqa: E501
 'help                                                -> посмотреть список доступных команд (данное сообщение).', # noqa: E501
@@ -60,7 +61,8 @@ class Utils:
         if command not in self.allowed_commands:
             raise CommandNotAllowedError(command)
         
-        if not args and command not in ['logout', 'help', 'exit']:
+        if not args and command not in \
+            ['logout', 'help', 'exit', 'show-portfolio']:
             raise ArgumentsError(command)
 
         return {'command': command, 'args': args}
