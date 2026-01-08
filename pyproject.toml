@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "finalproject-konovalova-m25-555"
 version = "0.1.0"
-description = ""
+description = "Платформа для отслеживания и симуляции торговли валютами"
 authors = ["Elizaveta Konovalova <Eliza050203@yandex.ru>"]
 readme = "README.md"
 
@@ -14,6 +14,8 @@ project = "valutatrade_hub.cli.interface:main"
 
 [tool.poetry.dependencies]
 python = "^3.12"
+requests = "^2.32.5"
+python-dotenv = "^1.2.1"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.14.6"

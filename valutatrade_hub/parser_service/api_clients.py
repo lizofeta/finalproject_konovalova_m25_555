@@ -23,10 +23,14 @@ class CoinGeckoClient(BaseApiClient):
     """
     Класс, реализующий получение курсов криптовалют. 
 
-    Возвращает словарь со следующей информацией:
+    Ключевой метод fetch_rates возвращает словарь со следующей информацией:
+    Для каждой пары валют:
+        from_currency - код исходной валюты 
+        to_currency - код целевой валюты
         rate - курс
-        updated_at - время обновления курсов
-        market_cap - последняя капитализация
+        timestamp - время обновления (отправление запроса к API)
+        source - источник
+        meta - дополнительная информация о результате обращения к API
     """
     def __init__(self, config: ParserConfig):
         self.config = config
@@ -103,9 +107,14 @@ class ExchangeRateApiClient(BaseApiClient):
     """
     Класс, реализующий получение курсов фиантных валют.
 
-    Возвращает в виде словаря следующую информацию о курсе валют:
+    Ключевой метод fetch_rates возвращает словарь со следующей информацией:
+    Для каждой пары валют:
+        from_currency - код исходной валюты 
+        to_currency - код целевой валюты
         rate - курс
-        updated_at - время обновления (отправление запроса к API)
+        timestamp - время обновления (отправление запроса к API)
+        source - источник
+        meta - дополнительная информация о результате обращения к API
     """
     def __init__(self, config: ParserConfig):
         self.config = config
@@ -166,7 +175,8 @@ class ExchangeRateApiClient(BaseApiClient):
 
             for code in currencies:
                 pair = f"{code}_{base_currency}"
-                rate = rates_data.get(code)
+                # Берем обратный в целях нормализации всех курсов к виду: 1 FROM = X USD
+                rate = round(1 / rates_data.get(code), 6)
                 if not rate:
                     raise ApiRequestError(
                         reason=f"ExchangeRate-API: Нет курса для {code}.")

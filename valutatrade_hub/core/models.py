@@ -4,7 +4,7 @@ import datetime
 import hashlib
 import uuid
 
-from valutatrade_hub.core.exceptions import InsufficientFundsError
+from valutatrade_hub.core.exceptions import InsufficientFundsError, RateUnavailableError
 
 
 class User:
@@ -322,7 +322,7 @@ class Portfolio:
                     }
                 rate_key = f'{currency}_{base_currency}'
                 if rate_key not in exchange_rates:
-                    raise ValueError((f'Курс для валюты {currency} '
+                    raise RateUnavailableError((f'Курс для валюты {currency} '
                     f'относительно {base_currency} не найден.'))
                 currency_rate = exchange_rates.get(rate_key)
                 currency_balance = wallet.balance

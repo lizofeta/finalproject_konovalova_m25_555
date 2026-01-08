@@ -97,7 +97,7 @@ class UserCommands:
 
         # Проверка длины пароля
         if len(password) < 4:
-            raise ShortPasswordError('Пароль должен быть не короче 4-х символов.')
+            raise ShortPasswordError()
 
         # Проверка уникальности имени пользователя
         if self.database.find_user_by_username(username):
@@ -194,7 +194,6 @@ class PortfolioCommands:
             base = base.upper()
             # Валидация существования валюты:
             get_currency(base)
-            
         user = self.session.get_current_user()
         user_id = user.user_id
         portfolio = self.database.find_portfolio_by_user_id(user_id)
@@ -466,6 +465,12 @@ class RatesCommands:
         updated_at = rates_data.get('last_refresh')
         # Извлекаем курсы
         pair_rate = self.database.get_rate(currency_from, currency_to)
+        if not pair_rate:
+            raise RateUnavailableError(
+                extra_info=f" В локальном кэше "
+                f"нет курса для пары {currency_from}_{currency_to}. "
+                "Обновите курсы командой update-rates, "
+                f"указав базой {currency_to} и попробуйте снова.")
         reversed_pair_rate = 1 / pair_rate
         # Проверяем, просрочены ли данные
         updated_at_dt = datetime.fromisoformat(updated_at).replace(microsecond=0)

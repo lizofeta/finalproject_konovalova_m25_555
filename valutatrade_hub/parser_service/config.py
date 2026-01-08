@@ -17,7 +17,7 @@ class ParserConfig:
 
     # Списки валют
     BASE_CURRENCY = 'USD'
-    FIAT_CURRENCIES = ('EUR','RUB', 'USD', 'IRR')
+    FIAT_CURRENCIES = ('EUR','RUB', 'USD', 'IRR', 'CNY', 'GBP', 'KZT')
     CRYPTO_CURRENCIES = ('BTC', 'ETH', 'SOL')
     CRYPTO_ID_MAP = {
         "BTC": "bitcoin",

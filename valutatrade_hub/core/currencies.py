@@ -138,6 +138,9 @@ def initialize_currencies():
     register_currency(FiatCurrency('Euro', 'EUR', 'Eurozone'))
     register_currency(FiatCurrency('Ruble', 'RUB', 'Russian Federation'))
     register_currency(FiatCurrency('Rial', 'IRR', 'Iran'))
+    register_currency(FiatCurrency('Great Britain Pound', 'GBP', 'United Kingdom'))
+    register_currency(FiatCurrency('Chinese Yuan', 'CNY', 'China'))
+    register_currency(FiatCurrency('Kazakh Tenge', 'KZT', 'Kazakhstan'))
     
     # Криптовалюты
     register_currency(CryptoCurrency('Bitcoin', 'BTC', 'SHA-256', 1823276180070))

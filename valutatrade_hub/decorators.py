@@ -1,6 +1,5 @@
 import logging
 from functools import wraps
-from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 

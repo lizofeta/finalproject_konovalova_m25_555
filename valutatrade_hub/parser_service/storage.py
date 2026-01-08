@@ -54,13 +54,6 @@ class RatesStorage:
         }
         self._atomic_write(data)
 
-    def load_rates(self):
-        if not self.file.exists():
-            return None
-        with open(self.file, mode='r', encoding='utf-8') as f:
-            data = json.load(f)
-        return data
-
     def _atomic_write(self, data):
         with tempfile.NamedTemporaryFile(
             mode='w', encoding='utf-8', delete=False, dir=self.file.parent 

@@ -33,12 +33,14 @@ class Utils:
 'buy-usd <amount>                                      -> пополнить USD кошелек.', # noqa: E501
 'sell <currency> <amount>                              -> продать валюту.', # noqa: E501
 'get-rate <from_currency> <to_currency>                -> получить текущий курс одной валюты к другой.', # noqa: E501
-'update-rates <source> (ciongecko/exchangerate) <base> -> обновить курсы. Если источник не указан - обновляются все', # noqa: E501
-'show-rates <currency> <base>                          -> показать курс для указанной валюты по отношению к базовой', # noqa: E501
+'update-rates <source> (ciongecko/exchangerate) <base> -> обновить курсы. Если источник не указан - обновляются все.', # noqa: E501
+'show-rates <currency> <base>                          -> показать курс для указанной валюты по отношению к базовой.', # noqa: E501
 'show-rates <top N> <base>                             -> показать N самых дорогих криптовалют по отношению к базовой.', # noqa: E501
 'help                                                  -> посмотреть список доступных команд (данное сообщение).', # noqa: E501
 'exit                                                  -> выйти из приложения.', # noqa: E501
-'\nБазовая валюта по умолчанию - USD.'
+'\nБазовая валюта по умолчанию - USD.',
+'\nДоступные фиатные валюты: USD, RUB, EUR, IRR, GBP, KZT, CNY',
+'Доступные криптовалюты: BTC, ETH, SOL'
         ]
     
     def parse_user_input(self, user_input:str):

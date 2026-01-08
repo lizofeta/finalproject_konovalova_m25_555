@@ -32,7 +32,7 @@ class InsufficientFundsError(ValutatradeError):
         self.code = code 
         self.required = required
         message = f"Недостаточно средств: доступно {self.available}\
- {self.code}, требуется {self.required} {self.code}"
+ {self.code}, требуется {self.required:.2f} {self.code}"
         super().__init__(message)
 
 class ApiRequestError(ValutatradeError):

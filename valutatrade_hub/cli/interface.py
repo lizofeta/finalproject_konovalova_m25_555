@@ -35,8 +35,8 @@ class CLI:
 
         print('Добро пожаловать на платформу для '
               ' отслеживания и симуляции торговли валютами!')
-        print('-' * 50)
-        print('Доступные команды: ')
+        print('-' * 90)
+        print('Доступные команды: \n')
         print('\n'.join(self.utils.help()))
         print()
         print('ВНИМАНИЕ! Во время регистрации необходимо '
@@ -45,7 +45,7 @@ class CLI:
 
         while self.active:
             try:
-                print('\nВведите команду: ')
+                print('\nВведите команду: \n')
                 user_input = input('> ')
                 # Парсинг команды:
                 parsed_input = self.utils.parse_user_input(user_input)
@@ -60,6 +60,14 @@ class CLI:
                         self.scheduler.stop()
                         self.active = False
                     case 'register':
+                        # проверка на активность сессии
+                        if self.session.is_logged_in():
+                            username = self.session.current_user.username
+                            print(f'Вы в системе под именем {username}. '
+                                  'Чтоб зарегистрировать нового пользователя, '
+                                  'сперва выполните выход из аккаунта '
+                                  'командой logout.')
+                            continue
                         # Валидация ввода
                         self.utils.validate_command(command, args)
                         # Регистрация
@@ -80,16 +88,17 @@ class CLI:
                         password = args[1]
                         print(self.user_commands.login(username, password))
                     case 'logout':
-                        # Выход из аккаунта 
+                        # Проверка на активность сессии 
                         if not self.session.is_logged_in():
                             print('Вы не вошли в систему, чтоб из нее выходить.')
                             continue
+                        # Выход из аккаунта
                         self.session.logout()
                         if not self.session.is_logged_in():
                             print('Вы успешно вышли из системы.')
                     case 'show-portfolio':
                         # Показываем портфель
-                        base = args[0] or 'USD'
+                        base = args[0] if args else 'USD'
                         print(self.portfolio_commands.show_portfolio(base))
                     case 'buy':
                         # Валидация ввода

@@ -52,8 +52,8 @@ class RatesUpdater:
                         "source": rates.get('source')
                     }
             except Exception as e:
-                logger.error(f'Произошла ошибка извлечения курсов из {name}: {e}')
-                raise ApiRequestError(reason=str(e)) from e
+                logger.exception(f'Произошла ошибка извлечения курсов из {name}: {e}')
+                raise ApiRequestError from e
         if history_records:
             self.history.append(history_records)
         if cache_snapshot:
