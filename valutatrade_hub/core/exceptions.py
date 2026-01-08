@@ -92,11 +92,17 @@ class RateUnavailableError(ValutatradeError):
     """
     Исключение, возникающее при ошибке получения курса
     """
-    def __init__(self, currency_from:str, currency_to:str):
-        self.currency_from = currency_from 
-        self.currency_to = currency_to
-        super().__init__(f"Ошибка получения курса\
- для {self.currency_from}->{self.currency_to}")
+    def __init__(self, 
+                 currency_from:str = None, 
+                 currency_to:str = None, 
+                 extra_info:str=None
+                ):
+        message = 'Ошибка получения курса'
+        if currency_from and currency_to:
+            message += f" для {currency_from}->{currency_to}. "
+        if extra_info:
+            message += extra_info
+        super().__init__(message)
 
 class CommandNotAllowedError(ValutatradeError):
     """
