@@ -1,8 +1,16 @@
 from valutatrade_hub.core.currencies import initialize_currencies
 from valutatrade_hub.core.exceptions import ValutatradeError
-from valutatrade_hub.core.usecases import PortfolioCommands, Session, UserCommands
+from valutatrade_hub.core.usecases import (
+    PortfolioCommands,
+    RatesCommands,
+    Session,
+    UserCommands,
+)
 from valutatrade_hub.core.utils import Utils
 from valutatrade_hub.logging_config import setup_logging
+from valutatrade_hub.parser_service.config import ParserConfig
+from valutatrade_hub.parser_service.scheduler import RatesScheduler
+from valutatrade_hub.parser_service.updater import RatesUpdater
 
 
 class CLI:
@@ -10,7 +18,11 @@ class CLI:
         self.session = Session()
         self.user_commands = UserCommands(self.session)
         self.portfolio_commands = PortfolioCommands(self.session)
+        self.rates_commands = RatesCommands()
         self.utils = Utils()
+        self.parser_config = ParserConfig()
+        self.rates_updater = RatesUpdater(self.parser_config)
+        self.scheduler = RatesScheduler(self.rates_updater, 300)
         self.active = True 
 
     def run(self):
@@ -18,6 +30,8 @@ class CLI:
         initialize_currencies()
         # Настройка логирования
         setup_logging()
+        # Запуск автообновления курсов
+        self.scheduler.start()
 
         print('Добро пожаловать на платформу для '
               ' отслеживания и симуляции торговли валютами!')
@@ -31,7 +45,7 @@ class CLI:
 
         while self.active:
             try:
-                print('Введите команду: ')
+                print('\nВведите команду: ')
                 user_input = input('> ')
                 # Парсинг команды:
                 parsed_input = self.utils.parse_user_input(user_input)
@@ -43,6 +57,7 @@ class CLI:
                         print('\n'.join(self.utils.help()))
                     case 'exit':
                         print('\nДо свидания!')
+                        self.scheduler.stop()
                         self.active = False
                     case 'register':
                         # Валидация ввода
@@ -74,7 +89,8 @@ class CLI:
                             print('Вы успешно вышли из системы.')
                     case 'show-portfolio':
                         # Показываем портфель
-                        print(self.portfolio_commands.show_portfolio())
+                        base = args[0] or 'USD'
+                        print(self.portfolio_commands.show_portfolio(base))
                     case 'buy':
                         # Валидация ввода
                         self.utils.validate_command(command, args)
@@ -101,7 +117,37 @@ class CLI:
                         # Получение курса
                         currency_from = args[0]
                         currency_to = args[1]
-                        print(self.portfolio_commands.get_rate(currency_from, currency_to))
+                        print(self.rates_commands.get_rate(currency_from, currency_to))
+                    case 'update-rates':
+                        # Валидация ввода
+                        self.utils.validate_command(command, args)
+                        # Запуск обновления курсов
+                        source = None
+                        base = 'USD'
+                        if args:
+                            if args[0] == 'coingecko' or args[0] == 'exchangerate':
+                                source = args[0]
+                                base = args[1] if len(args) > 1 else 'USD'
+                            else:
+                                base = args[0]
+                        self.rates_updater.run_update(source, base)
+                        print('Курсы успешно обновлены.')
+                    case 'show-rates':
+                        # Валидация ввода
+                        self.utils.validate_command(command, args)
+                        currency = None 
+                        top = None 
+                        base = 'USD'
+                        # Заполнение параметров
+                        if args:
+                            if args[0].lower() == 'top':
+                                top = int(args[1])
+                                base = args[2] if len(args) > 2 else 'USD'
+                            else:
+                                currency = args[0]
+                                base = args[1] if len(args) > 1 else 'USD'
+                        # Запуск функции
+                        print(self.rates_commands.show_rates(currency, top, base))
                     case '_':
                         print('Неизвестная команда. Используйте команду help, '
                               'чтоб ознакомиться со всеми доступными командами.')
@@ -113,7 +159,10 @@ class CLI:
                 print(e)
             except ValutatradeError as e:
                 print(e)
+            except KeyboardInterrupt:
+                self.scheduler.stop()
             except Exception as e:
+                self.scheduler.stop()
                 print(f'Произошла непредвиденная ошибка: {e}')
 
 def main():

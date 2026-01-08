@@ -11,9 +11,11 @@ from valutatrade_hub.core.exceptions import (
     WrongPasswordError,
 )
 from valutatrade_hub.core.models import Portfolio, User
+from valutatrade_hub.decorators import log_action
 from valutatrade_hub.infra.database import DatabaseManager, get_database
 from valutatrade_hub.infra.settings import SettingsLoader, get_settings
-from valutatrade_hub.decorators import log_action
+from valutatrade_hub.parser_service.config import ParserConfig
+from valutatrade_hub.parser_service.updater import RatesUpdater
 
 
 class Session:
@@ -415,6 +417,14 @@ class PortfolioCommands:
 
         return result 
     
+
+class RatesCommands:
+    def __init__(self):
+        self.database = DatabaseManager()
+        self.settings = SettingsLoader()
+        self.config = ParserConfig()
+        self.updater = RatesUpdater(self.config)
+
     def get_rate(self, currency_from:str, currency_to:str):
         """
         Получить текущий курс одной валюты к другой.
@@ -445,88 +455,145 @@ class PortfolioCommands:
 
         # Попытка взять курс из локального кэша (rates.json)
         # Если курс свежий (моложе 5 минут), берем его, 
-        # иначе - запрашиваем у внешнего источника
+        # иначе - запрашиваем у внешнего источника через Parser Service
+        rates_data = self.database.load_rates()
+        ttl = self.settings.get_rates_ttl() # ttl = 300 секунд
+        if not rates_data:
+            raise RateUnavailableError(
+                'Локальный кэш пуст. '
+                'Выполните update-rates, чтобы загрузить данные'
+            )
+        updated_at = rates_data.get('last_refresh')
+        # Извлекаем курсы
+        pair_rate = self.database.get_rate(currency_from, currency_to)
+        reversed_pair_rate = 1 / pair_rate
+        # Проверяем, просрочены ли данные
+        updated_at_dt = datetime.fromisoformat(updated_at).replace(microsecond=0)
+        updated_display = updated_at.replace('Z', '').replace('T', ' ')
+        if datetime.now(timezone.utc) < updated_at_dt + timedelta(seconds=int(ttl)):
+            return (f"Курс {currency_from}->{currency_to}: {pair_rate:.6f} "
+                    f"(обновлено: {updated_display})"
+                    f"\nОбратный курс: {currency_to}->{currency_from}:"
+                    f" {reversed_pair_rate:.6f}")
+        else:
+            # данные просрочены: обновляем через RatesUpdater
+            self.updater.run_update()
+            # Извлекаем новые курсы
+            new_rates_data = self.database.load_rates()
+            if not new_rates_data:
+                raise RateUnavailableError(
+                    'Локальный кэш пуст. '
+                    'Выполните update-rates, чтобы загрузить данные'
+                )
+            new_updated_at = new_rates_data.get('last_refresh')
+            new_rate = self.database.get_rate(currency_from, currency_to)
+            if new_updated_at:
+                new_updated_at_display = new_updated_at\
+                    .replace('T', ' ').replace('Z', '')
+            new_reversed_rate = 1/new_rate if new_rate > 0 else 0
+            return (
+                f"Курс {currency_from}->{currency_to}: {new_rate:.6f} "
+                f"(обновлено: {new_updated_at_display}) "
+                f"\nОбратный курс {currency_to}->{currency_from}: "
+                f"{new_reversed_rate:.6f}"
+            )
+    
+    def show_rates(
+            self, 
+            currency:str=None, 
+            top:int=None,
+            base:str='USD'
+        ):
+        # Проверки
+        if not currency and not top:
+            raise ValueError("Необходимо указать хотя бы "
+                             "один аргумент: либо currency, либо top")
+        if currency and top:
+            raise ValueError('Нельзя комбинировать аргументы currency & top.')
+        # Валидация числа топа
+        if top:
+            if top <= 0:
+                raise ValueError\
+                    ('Количество криптовалют должно быть положительным')
+        # Загружаем курсы из кэша
         rates_data = self.database.load_rates()
         if rates_data:
             rates = rates_data.get('rates')
-            if rates:
-                pair = rates.get(f"{currency_from}_{currency_to}")
-                if pair:
-                    pair_rate = pair.get('rate')
-                    updated_at = pair.get('updated_at')
-                else:
-                    pair = rates.get(f"{currency_to}_{currency_from}")
-                    if pair:
-                        pair_rate_direct = pair.get('rate') 
-                        if pair_rate_direct:
-                            pair_rate = 1 / pair_rate_direct if pair_rate_direct > 0 else 0
-                        updated_at = pair.get('updated_at')
-            
-            ttl = self.settings.get_rates_ttl() # ttl = 300 секунд
-            reversed_rate = 1/pair_rate if pair_rate > 0 else 0
-            if updated_at:
-                moscow_tz = timezone(timedelta(hours=3))
-                updated_at_dt = datetime.fromisoformat(updated_at).astimezone(moscow_tz)
-                updated_display = updated_at_dt.isoformat()\
-                    .replace('+03:00', '').replace('T', ' ')
-                if datetime.now(timezone.utc) < updated_at_dt + timedelta(seconds=int(ttl)):
-                    return (f"Курс {currency_from}->{currency_to}: {pair_rate:.6f} "
-                         f"(обновлено: {updated_display})"
-                         f"\nОбратный курс: {currency_to}->{currency_from}: {reversed_rate:.6f}")
-                else:
-                    # данные просрочены: заглушка (фиктивные курсы)
-                    new_rates = {
-                            "rates": {    
-                                "EUR_USD": {
-                                    "rate": 1.1587,
-                                    "updated_at": datetime.now(timezone.utc)\
-                                        .replace(microsecond=0).isoformat()
-                                },
-                                "BTC_USD": {
-                                    "rate": 59337.21,  
-                                    "updated_at": datetime.now(timezone.utc)\
-                                        .replace(microsecond=0).isoformat()
-                                },
-                                "RUB_USD": {
-                                    "rate": 0.01237,      
-                                    "updated_at": datetime.now(timezone.utc)\
-                                        .replace(microsecond=0).isoformat()
-                                },
-                                "ETH_USD": {
-                                    "rate": 3720.00,         
-                                    "updated_at": datetime.now(timezone.utc)\
-                                        .replace(microsecond=0).isoformat()
-                                },
-                                "IRR_USD": {
-                                    "rate": 0.000024,
-                                    "updated_at": datetime.now(timezone.utc)\
-                                        .replace(microsecond=0).isoformat()
-                                } 
-                            },
-                            "last_refresh": datetime.now(timezone.utc)\
-                                        .replace(microsecond=0).isoformat()
-                        }
-                    self.database.save_rates(new_rates)
-                    new_rates = new_rates.get('rates')
-                    new_pair = new_rates.get(f'{currency_from}_{currency_to}')
-                    if new_pair:
-                        new_pair_rate = new_pair.get('rate')
-                        new_updated_at = new_pair.get('updated_at')
-                    else:
-                        new_pair = new_rates.get(f'{currency_to}_{currency_from}')
-                        new_pair_rate_direct = new_pair.get('rate')
-                        new_pair_rate = 1/new_pair_rate_direct\
-                              if new_pair_rate_direct > 0 else 0
-                        new_updated_at = new_pair.get('updated_at')
-                    if new_updated_at:
-                        moscow_tz = timezone(timedelta(hours=3))
-                        new_updated_at_dt = datetime.fromisoformat(new_updated_at)\
-                            .astimezone(moscow_tz)
-                        new_updated_at_display = new_updated_at_dt.isoformat()\
-                            .replace('+03:00', '').replace('T', ' ')
-                    new_reversed_rate = 1/new_pair_rate if new_pair_rate > 0 else 0
-                    return (
-                        f"Курс {currency_from}->{currency_to}: {new_pair_rate:.6f} "
-                        f"(обновлено: {new_updated_at_display}) "
-                        f"\nОбратный курс {currency_to}->{currency_from}: {new_reversed_rate:.6f}"
+            last_updated_at = rates_data.get('last_refresh', 'информация отсутствует')
+        else:
+            raise RateUnavailableError(extra_info=". Локальный кэш пуст. "
+                    "Выполните update-rates, чтобы загрузить данные.")
+        if last_updated_at != 'информация отсутствует':
+                updated_at_display = last_updated_at\
+                    .replace('T', ' ').replace('Z', '')
+        else:
+            updated_at_display = last_updated_at
+        # Обрабатываем сценарий получения курса конкретной валюты
+        if currency:
+            # Валидируем коды валют
+            get_currency(currency)
+            get_currency(base)
+            # Формируем пару 
+            pair = f"{currency.upper()}_{base.upper()}"
+            # Пробуем получить курс для сформированной пары валют
+            pair_rate = rates.get(pair)
+            if not pair_rate:
+                raise RateUnavailableError(
+                    currency_from=currency,
+                    currency_to=base,
+                    extra_info=(f"Курс для пары {pair} "
+                    "не найден в кэше. Выполните update-rates, "
+                    f"указав базой {base} и повторите попытку.")
+                )
+            rate = pair_rate.get('rate')
+            if not rate:
+                raise RateUnavailableError(
+                    currency_from=currency,
+                    currency_to=base
+                )
+            return (f"Курс для {currency} относительно {base} "
+                    f"из кэша (обновлено: {updated_at_display})"
+                    f"\n- {pair}: {rate:.5f}")
+        # ОБрабатываем сценарий с получением курсов для топ N криптовалют 
+        if top is not None:
+            crypto_coins = list(self.config.CRYPTO_ID_MAP.keys())
+            crypto_rates = []
+            for code in crypto_coins:
+                # Формируем пару
+                pair = f"{code}_{base}"
+                # Пробуем извлечь курс для пары
+                pair_rate = rates.get(pair)
+                if not pair_rate:
+                    raise RateUnavailableError(
+                        currency_from=code,
+                        currency_to=base,
+                        extra_info=(f"Курс для пары {pair} "
+                        "не найден в кэше. Выполните update-rates, "
+                        f"указав базой {base} и повторите попытку.")
                     )
+                # Извлекаем и сохраняем курс
+                rate = pair_rate.get('rate')
+                if not rate:
+                    raise RateUnavailableError(
+                    currency_from=code,
+                    currency_to=base
+                    )
+                crypto_rates.append((code, rate))
+            if top > len(crypto_rates):
+                raise RateUnavailableError(
+                    extra_info=(f' Всего извлечено {len(crypto_rates)}.'
+                                f' Запрошено: {top}.')
+                    )
+            # Получаем топ N сортировкой и срезом 
+            top_n = sorted(
+                crypto_rates, 
+                key=lambda x: x[1], 
+                reverse=True
+            )[:top]
+
+            # Формируем итоговую отформатированную строку
+            result = f"Курсы из локального кэша (обновлено: {updated_at_display})"
+            for code, rate in top_n:
+                result += f"\n- {code}_{base}: {rate:.2f}"
+            
+            return result
